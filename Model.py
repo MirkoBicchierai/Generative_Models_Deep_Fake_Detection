@@ -7,14 +7,24 @@ class ClassificationLSTM(nn.Module):
         super(ClassificationLSTM, self).__init__()
         self.layers = layers
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=layers, bidirectional=True, batch_first=True)
-        self.norm = nn.LayerNorm(hidden_size*2)
+        self.lstm = nn.LSTM(
+            input_size,
+            hidden_size,
+            num_layers=layers,
+            bidirectional=True,
+            batch_first=True,
+        )
+        self.norm = nn.LayerNorm(hidden_size * 2)
         self.fc_classification = nn.Linear(hidden_size * 2, num_classes)
 
     def forward(self, inputs):
         batch_size = inputs.size(0)
-        h_t = torch.zeros(2 * self.layers, batch_size, self.hidden_size, device=inputs.device)
-        c_t = torch.zeros(2 * self.layers, batch_size, self.hidden_size, device=inputs.device)
+        h_t = torch.zeros(
+            2 * self.layers, batch_size, self.hidden_size, device=inputs.device
+        )
+        c_t = torch.zeros(
+            2 * self.layers, batch_size, self.hidden_size, device=inputs.device
+        )
         output, (h_n, c_n) = self.lstm(inputs, (h_t, c_t))
         output = torch.mean(output, dim=1)
         output = self.norm(output)
@@ -26,35 +36,58 @@ class ClassificationGRU(nn.Module):
         super(ClassificationGRU, self).__init__()
         self.layers = layers
         self.hidden_size = hidden_size
-        self.gru = nn.GRU(input_size, hidden_size, num_layers=layers, bidirectional=True, batch_first=True)
+        self.gru = nn.GRU(
+            input_size,
+            hidden_size,
+            num_layers=layers,
+            bidirectional=True,
+            batch_first=True,
+        )
         self.norm = nn.LayerNorm(hidden_size * 2)
         self.fc_classification = nn.Linear(hidden_size * 2, num_classes)
 
     def forward(self, inputs):
         batch_size = inputs.size(0)
-        h_t = torch.zeros(2 * self.layers, batch_size, self.hidden_size, device=inputs.device)
+        h_t = torch.zeros(
+            2 * self.layers, batch_size, self.hidden_size, device=inputs.device
+        )
         output, h_n = self.gru(inputs, h_t)
         output = torch.mean(output, dim=1)
         output = self.norm(output)
         return self.fc_classification(output)
 
+
 class ClassificationMLP(nn.Module):
-    def __init__(self,input_size, output_size, hidden_size, num_classes):
+    def __init__(
+        self, input_size, final_hidden_size, hidden_size, num_classes, dropout_rate=0.3
+    ):
         super(ClassificationMLP, self).__init__()
         self.mlp = nn.Sequential(
             nn.Linear(input_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
+            nn.LayerNorm(hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size, hidden_size * 2),
+            nn.LayerNorm(hidden_size * 2),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size),
-            nn.BatchNorm1d(output_size),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size * 2, hidden_size * 4),  # Increased size
+            nn.LayerNorm(hidden_size * 4),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size * 4, hidden_size * 2),  # Decreased size
+            nn.LayerNorm(hidden_size * 2),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size * 2, hidden_size),  # Smaller layer again
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_size, final_hidden_size),
             nn.ReLU(),
         )
-        self.head = nn.Linear(hidden_size, num_classes)
+        self.head = nn.Linear(final_hidden_size, num_classes)
 
     def forward(self, inputs):
         x = self.mlp(inputs)
-        x = self.head(x)
+        x = self.head(x)  # No activation, handled by loss function
         return x
