@@ -1,3 +1,4 @@
+import comet_ml
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -6,26 +7,22 @@ from DataLoader import FlattenedMLPDataset, FastDataset
 from tqdm import tqdm
 from torch import optim
 import numpy as np
-
-one_vs_rest = False  # if true consider all fake classes as same class
-
-train_dataset_path = "Dataset/FF++/DINO/train"
-val_dataset_path = "Dataset/FF++/DINO/val"
-test_dataset_path = "Dataset/FF++/DINO/test"
+import argparse
 
 
-classes = [
-    "ORIGINAL",
-    # "F2F",
-    # "DF",
-    # "FSH",
-    # "FS",
-    "NT",
-]  # ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"]
+comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
 
+
+lr = 0.0001
 batch_train = 64
 val_test_batch_size = 128
 num_workers = 12
+
+exp = comet_ml.Experiment(
+    project_name="Generative Models Project Work",
+    auto_metric_logging=False,
+    auto_param_logging=False,
+)
 
 
 def train(model, train_dataloader, criterion, optimizer, device):
@@ -121,27 +118,87 @@ def evaluate(model, dataloader, criterion, device):
 
     avg_loss = running_loss / len(dataloader)
     accuracy = correct / total * 100
+
     return avg_loss, accuracy
+
+
+def _parse_args():
+    """Parse cmd line args for training an image classifier."""
+    parser = argparse.ArgumentParser(description="Train an image classifier")
+    parser.add_argument(
+        "--one_vs_rest",
+        action="store_true",
+        help="If true, train a single class vs all other classes",
+    )
+
+    parser.add_argument(
+        "--classes",
+        nargs="+",
+        default=["ORIGINAL", "NT"],
+        help="List of classes to train on",
+    )
+
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="CLIP",
+        help="Dataset to use for training",
+    )
+    return parser.parse_args()
 
 
 # Main function
 def main():
+
+    args = _parse_args()
+    one_vs_rest = args.one_vs_rest
+    classes = args.classes
+    dataset = args.dataset
+    if one_vs_rest:
+        str_classes = "-".join(classes[1:])
+        str_classes = "ORIGINAL vs " + str_classes
+    else:
+        str_classes = "-".join(classes)
+
+    parameters = {
+        "batch_size": batch_train,
+        "learning_rate": lr,
+        "type": str_classes,
+    }
+    if one_vs_rest and len(classes) == 6:
+        exp_class = "Original vs All"
+    elif len(classes) == 6:
+        exp_class = "All Classes"
+    else:
+        exp_class = classes[1]
+
+    exp.set_name(dataset + " - " + "MLP" + " - " + exp_class)
+
+    train_dataset_path = f"Dataset/FF++/{dataset}/train"
+    val_dataset_path = f"Dataset/FF++/{dataset}/val"
+    test_dataset_path = f"Dataset/FF++/{dataset}/test"
+
+    exp.log_parameters(parameters)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Hyperparameters
     input_size = 768 * 2 if "DINO" in train_dataset_path else 768
     hidden_size = 512
     final_hidden_size = 256
-    num_classes = 1 if one_vs_rest else len(classes)
-    learning_rate = 0.001
-    epochs = 150
+    num_classes = 2 if one_vs_rest else len(classes)
+    learning_rate = lr
+    epochs = 300
 
     # Initialize model, loss function, and optimizer
     model = ClassificationMLP(
         input_size, final_hidden_size, hidden_size, num_classes
     ).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.SGD(
+        model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     # Load datasets and dataloaders
     dataset_train = FlattenedMLPDataset(train_dataset_path, classes, one_vs_rest)
@@ -177,18 +234,24 @@ def main():
     # Training loop
     for epoch in range(1, epochs + 1):
         train_loss = train(model, training_dataloader, criterion, optimizer, device)
+        exp.log_metric(str_classes + " loss", train_loss, step=epoch)
         val_loss, val_accuracy = evaluate_with_voting(
             model, val_dataloader, criterion, device
         )
 
+        exp.log_metric(str_classes + " val_loss", val_loss, step=epoch)
+        exp.log_metric(str_classes + " Validation Accuracy", val_accuracy, step=epoch)
+
         print(
             f"Epoch {epoch}/{epochs}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Acc = {val_accuracy*100:.2f}%"
         )
+        scheduler.step()
 
     # Final testing
     test_loss, test_accuracy = evaluate_with_voting(
         model, test_dataloader, criterion, device
     )
+    exp.log_metric(str_classes + " Test Accuracy", test_accuracy)
     print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy*100:.2f}%")
 
 

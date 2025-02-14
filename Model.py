@@ -64,22 +64,15 @@ class ClassificationMLP(nn.Module):
         super(ClassificationMLP, self).__init__()
         self.mlp = nn.Sequential(
             nn.Linear(input_size, hidden_size),
-            nn.LayerNorm(hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
             nn.Linear(hidden_size, hidden_size * 2),
-            nn.LayerNorm(hidden_size * 2),
+            nn.BatchNorm1d(hidden_size * 2),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_size * 2, hidden_size * 4),  # Increased size
-            nn.LayerNorm(hidden_size * 4),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_size * 4, hidden_size * 2),  # Decreased size
-            nn.LayerNorm(hidden_size * 2),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_size * 2, hidden_size),  # Smaller layer again
+            nn.Linear(hidden_size * 2, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
             nn.Linear(hidden_size, final_hidden_size),

@@ -1,2 +1,4 @@
 # Project exclude paths
 /Dataset/
+.venv/
+__pycache__/*
