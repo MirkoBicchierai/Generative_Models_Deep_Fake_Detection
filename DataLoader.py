@@ -1,8 +1,8 @@
 import os
 from os.path import isfile
-import torch
 from torch.utils.data import Dataset
 import numpy as np
+import torch
 
 
 class FastDataset(Dataset):
@@ -10,6 +10,7 @@ class FastDataset(Dataset):
         self.label_target = label_target
         self.folder_path = folder_path
         self.one_vs_rest = one_vs_rest
+
         self.file_list = [
             os.path.join(folder_path, f)
             for f in sorted(os.listdir(folder_path))
@@ -38,9 +39,10 @@ class FastDataset(Dataset):
 
         sequence = np.load(self.file_list[idx], allow_pickle=True)
         label = self.labels[idx]
-
         sequence = torch.Tensor(sequence)
-        return sequence.squeeze(), label
+        sequence = sequence.squeeze()
+
+        return sequence, label
 
 
 class FlattenedMLPDataset(Dataset):
@@ -48,6 +50,7 @@ class FlattenedMLPDataset(Dataset):
         self.label_target = label_target
         self.folder_path = folder_path
         self.one_vs_rest = one_vs_rest
+
         self.file_list = [
             os.path.join(folder_path, f)
             for f in sorted(os.listdir(folder_path))
@@ -78,4 +81,5 @@ class FlattenedMLPDataset(Dataset):
     def __getitem__(self, idx):
         vector, label = self.data[idx]
         vector = torch.Tensor(vector).squeeze(0)
+
         return vector, label
