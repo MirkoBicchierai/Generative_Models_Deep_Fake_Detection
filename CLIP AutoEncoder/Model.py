@@ -12,19 +12,14 @@ class AutoEncoder(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Linear(64, 16),
-            nn.ReLU(),
+            nn.ReLU()
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(16, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
             nn.Linear(64, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, input_dim),
-            nn.Tanh(),
         )
 
     def encode(self, x):

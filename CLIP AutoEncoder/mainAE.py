@@ -9,33 +9,22 @@ from tqdm import tqdm
 import torch.nn.functional as F
 
 
-def test_vae_classifier(model, test_loader, training_dataloader, device):
+def test_vae_classifier(model, test_loader, device):
     model.eval()
 
     with torch.no_grad():
 
-        # Calculate errors for the original class (training data)
-        errors_original_class = []
-        for data, label in training_dataloader:
-            data, labels = data.to(device), label.to(device)
-            recon_batch = model(data)
-            error_recon = F.mse_loss(recon_batch, data, reduction='sum')
-            errors_original_class.append(error_recon.item())
-
-        center = np.mean(errors_original_class)
-
-        distances = []
+        errors = []
         true_labels = []
 
         for data, label in test_loader:
             data, label = data.to(device).squeeze(), label.to(device)
             recon_seq = model(data)
             error_recon_sequence = F.mse_loss(recon_seq, data, reduction='sum')
-            distance = error_recon_sequence.item() - center
-            distances.append(distance)
+            errors.append(error_recon_sequence.item())
             true_labels.append(label.item())
 
-        distances = np.array(distances)
+        distances = np.array(errors)
         true_labels = np.array(true_labels)
 
         # Calculate ROC curve
@@ -49,10 +38,13 @@ def test_vae_classifier(model, test_loader, training_dataloader, device):
 
         accuracy = np.mean(predictions == true_labels)
 
-    return accuracy, optimal_threshold, center
+    return accuracy, optimal_threshold
 
-def ae_loss(recon_x, x):
-    return F.mse_loss(recon_x, x, reduction='sum')
+def ae_loss(recon_x, x, loss_type='l1'):
+    if loss_type.lower() == 'l1':
+        return F.l1_loss(recon_x, x, reduction='sum')
+    else:
+        return F.mse_loss(recon_x, x, reduction='sum')
 
 def train(epochs,training_dataloader, val_dataloader, optimizer, model, device, exp):
     for epoch in tqdm(range(epochs)):
@@ -69,8 +61,9 @@ def train(epochs,training_dataloader, val_dataloader, optimizer, model, device, 
         epoch_loss = tot_loss / len(training_dataloader)
         if epoch % 10 == 0:
             print(f"Epoch {epoch} Loss: {epoch_loss:.6f}")
-            accuracy, threshold, center = test_vae_classifier(model, val_dataloader,training_dataloader, device)
-            print(f"Epoch {epoch} Validation Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}, Center: {center:.6f}")
+            accuracy, threshold = test_vae_classifier(model, val_dataloader, device)
+            exp.log_metric('Validation Accuracy AE', accuracy, step=epoch)
+            print(f"Epoch {epoch} Validation Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}")
         exp.log_metric('loss AE', epoch_loss, step=epoch)
 
 
@@ -82,13 +75,12 @@ def main():
     val_dataset_path = "../Dataset/FF++/CLIP/val"
     test_dataset_path = "../Dataset/FF++/CLIP/test"
 
-    lr = 1e-3
-
     #DataLoader parameters
     batch_train = 64
     num_workers = 12
 
     epochs = 100
+    lr = 1e-2
 
     one_vs_rest = True
     classes_train = ["ORIGINAL"]
@@ -109,12 +101,12 @@ def main():
 
     model = AutoEncoder(input_dim=768).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr)
 
     train(epochs, training_dataloader, val_dataloader, optimizer, model, device, exp)
 
-    accuracy, threshold, center = test_vae_classifier(model, test_dataloader,training_dataloader, device)
-    print(f"Test Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}, Center: {center:.6f}")
+    accuracy, threshold = test_vae_classifier(model, test_dataloader, device)
+    print(f"Test Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}")
 
 if __name__ == '__main__':
     main()
