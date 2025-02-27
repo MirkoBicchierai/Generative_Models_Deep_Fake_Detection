@@ -8,12 +8,12 @@ class AutoEncoder(nn.Module):
         self.input_dim = input_dim
 
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 256),  # Meno neuroni rispetto a 512
+            nn.Linear(input_dim, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Linear(256, 64),  # Riduzione più drastica
+            nn.Linear(256, 64),
             nn.ReLU(),
-            nn.Linear(64, 16),  # Bottleneck ancora più stretto
+            nn.Linear(64, 16),
             nn.ReLU(),
         )
 
@@ -26,8 +26,6 @@ class AutoEncoder(nn.Module):
             nn.Linear(256, input_dim),
             nn.Tanh(),
         )
-
-
 
     def encode(self, x):
         return self.encoder(x)
@@ -42,7 +40,7 @@ class AutoEncoder(nn.Module):
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, input_dim, num_classes, latent_dim=8):
+    def __init__(self, input_dim, latent_dim=8):
         super(VariationalAutoencoder, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
@@ -67,17 +65,6 @@ class VariationalAutoencoder(nn.Module):
             nn.Linear(256, input_dim),
         )
 
-        self.classifier = nn.Sequential(
-            nn.Linear(latent_dim, 64),
-            nn.BatchNorm1d(64),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.2),
-            nn.Linear(64, 32),
-            nn.BatchNorm1d(32),
-            nn.LeakyReLU(0.2),
-            nn.Linear(32, num_classes),
-        )
-
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
@@ -95,5 +82,4 @@ class VariationalAutoencoder(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         x_recon = self.decode(z)
-        classification = self.classifier(z)
-        return x_recon, mu, logvar, classification
+        return x_recon, mu, logvar
