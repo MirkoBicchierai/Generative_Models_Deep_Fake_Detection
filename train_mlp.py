@@ -11,8 +11,11 @@ import argparse
 import torch.nn.functional as F
 from oscr import compute_oscr
 
-
+# nicco api
 comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
+
+# mirko api
+# comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
 
 all_classes = [
     "ORIGINAL",
@@ -188,6 +191,7 @@ def _parse_args():
 
 # Main function
 def main():
+    best_val = 0
 
     args = _parse_args()
     one_vs_rest = args.one_vs_rest
@@ -229,7 +233,7 @@ def main():
     final_hidden_size = 256
     num_classes = 2 if one_vs_rest else len(classes)
     learning_rate = lr
-    epochs = 100
+    epochs = 1
 
     # Initialize model, loss function, and optimizer
     model = ClassificationMLP(
@@ -295,12 +299,18 @@ def main():
         print(
             f"Epoch {epoch}/{epochs}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Acc = {val_accuracy*100:.2f}%"
         )
+        if val_accuracy > best_val:
+            best_val = val_accuracy
+            torch.save(model.state_dict(), f"./mlp/best_{str_classes}.pt")
         scheduler.step()
 
     # Final testing and predictions/labels data for known samples
     test_loss, test_accuracy, pred_k, labels = evaluate_with_voting(
         model, test_dataloader, criterion, device
     )
+    # load best for oscr
+    model.load_state_dict(torch.load(f"./mlp/best_{str_classes}.pt"))
+
     exp.log_metric(str_classes + " Test Accuracy", test_accuracy)
     print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy*100:.2f}%")
     # Get predictions for unknown samples (and their labels)
