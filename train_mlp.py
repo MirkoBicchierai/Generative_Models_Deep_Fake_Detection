@@ -8,10 +8,23 @@ from tqdm import tqdm
 from torch import optim
 import numpy as np
 import argparse
+import torch.nn.functional as F
+from oscr import compute_oscr
 
+# nicco api
+comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
 
-comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
+# mirko api
+# comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
 
+all_classes = [
+    "ORIGINAL",
+    "F2F",
+    "DF",
+    "FSH",
+    "FS",
+    "NT",
+]  # ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"]
 
 lr = 0.0001
 batch_train = 64
@@ -50,6 +63,8 @@ def evaluate_with_voting(model, dataloader, criterion, device):
     correct_sequences = 0  # For tracking the number of correctly predicted sequences
     total_sequences = 0  # Total number of sequences
     total_loss = 0.0  # Accumulating loss
+    all_outputs = []
+    all_labels = []
 
     with torch.no_grad():
         for sequences, labels in dataloader:
@@ -61,10 +76,14 @@ def evaluate_with_voting(model, dataloader, criterion, device):
                 label = labels[i]  # Label for the entire sequence
                 frame_preds = []
                 sequence_loss = 0.0  # Initialize sequence-specific loss
+                frame_probs_list = []
+                all_labels.append(label.cpu().numpy())
 
                 for frame in sequence:
                     frame = frame.unsqueeze(0).to(device)  # Add batch dimension
                     output = model(frame)  # Get model output
+                    probs = F.softmax(output, dim=1)  # Convert logits to probabilities
+                    frame_probs_list.append(probs.cpu().numpy())
 
                     # Ensure the label is reshaped for the loss function
                     label_tensor = torch.tensor([label]).to(device)  # Shape: [1]
@@ -79,6 +98,9 @@ def evaluate_with_voting(model, dataloader, criterion, device):
                     )  # Get predicted class for the frame
                     frame_preds.append(predicted.item())
 
+                frame_probs = np.concatenate(frame_probs_list, axis=0)
+                avg_probs = np.mean(frame_probs, axis=0)
+                all_outputs.append(avg_probs)
                 # Majority vote on frame predictions
                 correct_frames = sum(
                     [1 for pred in frame_preds if pred == label.item()]
@@ -90,10 +112,30 @@ def evaluate_with_voting(model, dataloader, criterion, device):
                 total_sequences += 1
 
                 total_loss += sequence_loss
+
     accuracy = correct_sequences / total_sequences
     average_loss = total_loss / total_sequences
 
-    return average_loss, accuracy
+    return (
+        average_loss,
+        accuracy,
+        np.array(all_outputs),
+        np.array(all_labels),
+    )
+
+
+def get_predictions(model, dataloader, device):
+    model.eval()
+    all_outputs = []
+    all_labels = []
+    with torch.no_grad():
+        for data, labels in dataloader:
+            data = data.to(device)
+            outputs = model(data)
+            probs = F.softmax(outputs, dim=1)  # Convert logits to probabilities
+            all_outputs.append(probs.cpu().numpy())
+            all_labels.append(labels.cpu().numpy())
+    return np.concatenate(all_outputs), np.concatenate(all_labels)
 
 
 # Function to evaluate the model
@@ -149,10 +191,13 @@ def _parse_args():
 
 # Main function
 def main():
+    best_val = 0
 
     args = _parse_args()
     one_vs_rest = args.one_vs_rest
     classes = args.classes
+    oscr_classes = list(set(all_classes) - set(classes))
+    print(oscr_classes)
     dataset = args.dataset
     if one_vs_rest:
         str_classes = "-".join(classes[1:])
@@ -188,7 +233,7 @@ def main():
     final_hidden_size = 256
     num_classes = 2 if one_vs_rest else len(classes)
     learning_rate = lr
-    epochs = 300
+    epochs = 1
 
     # Initialize model, loss function, and optimizer
     model = ClassificationMLP(
@@ -201,6 +246,15 @@ def main():
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     # Load datasets and dataloaders
+    oscr_dataset = FastDataset(val_dataset_path, oscr_classes, one_vs_rest)
+    oscr_dataloader = DataLoader(
+        oscr_dataset,
+        batch_size=val_test_batch_size,
+        shuffle=False,
+        drop_last=False,
+        pin_memory=True,
+        num_workers=num_workers,
+    )
     dataset_train = FlattenedMLPDataset(train_dataset_path, classes, one_vs_rest)
     training_dataloader = DataLoader(
         dataset_train,
@@ -235,7 +289,7 @@ def main():
     for epoch in range(1, epochs + 1):
         train_loss = train(model, training_dataloader, criterion, optimizer, device)
         exp.log_metric(str_classes + " loss", train_loss, step=epoch)
-        val_loss, val_accuracy = evaluate_with_voting(
+        val_loss, val_accuracy, _, _ = evaluate_with_voting(
             model, val_dataloader, criterion, device
         )
 
@@ -245,14 +299,32 @@ def main():
         print(
             f"Epoch {epoch}/{epochs}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Acc = {val_accuracy*100:.2f}%"
         )
+        if val_accuracy > best_val:
+            best_val = val_accuracy
+            torch.save(model.state_dict(), f"./mlp/best_{str_classes}.pt")
         scheduler.step()
 
-    # Final testing
-    test_loss, test_accuracy = evaluate_with_voting(
+    # Final testing and predictions/labels data for known samples
+    test_loss, test_accuracy, pred_k, labels = evaluate_with_voting(
         model, test_dataloader, criterion, device
     )
+    # load best for oscr
+    model.load_state_dict(torch.load(f"./mlp/best_{str_classes}.pt"))
+
     exp.log_metric(str_classes + " Test Accuracy", test_accuracy)
     print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy*100:.2f}%")
+    # Get predictions for unknown samples (and their labels)
+    _, _, pred_u, _ = evaluate_with_voting(model, oscr_dataloader, criterion, device)
+
+    # Get predictions for unknown samples (labels not needed here)
+
+    results = compute_oscr(pred_k, pred_u, labels)
+
+    print(f"OSCR Score (AUROC): {results['oscr']:.4f}")
+    print(f"CCR @ 5% FPR: {results['ccr@fpr05']:.4f}")
+
+
+# Function to get model predictions (softmax probabilities) from a DataLoader
 
 
 if __name__ == "__main__":
