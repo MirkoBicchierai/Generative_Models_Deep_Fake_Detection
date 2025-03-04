@@ -28,7 +28,7 @@ def test(model, data_loader, device):
             correct += (predicted == labels).sum().item()
     return loss / len(data_loader), correct / total
 
-def train(epochs, model, optimizer, train_dataloader, val_dataloader, test_dataloader, device, exp):
+def train(epochs, model, optimizer, train_dataloader, val_dataloader, test_dataloader, device, exp, str_classes):
     for epoch in tqdm(range(epochs)):
         model.train()
         tot_loss = 0
@@ -48,9 +48,12 @@ def train(epochs, model, optimizer, train_dataloader, val_dataloader, test_datal
             val_loss, val_accuracy = test(model, val_dataloader, device)
             print(f"Epoch {epoch} Train Loss: {epoch_loss:.6f}")
             print(f'Val Loss: {val_loss:.6f}, Val Accuracy: {val_accuracy:.6f}')
+            exp.log_metric(str_classes + 'Validation accuracy Transformer', val_accuracy)
+            exp.log_metric(str_classes + 'Validation loss Transformer', val_loss, step=epoch)
 
     test_loss, test_accuracy = test(model, test_dataloader, device)
     print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy}')
+    exp.log_metric(str_classes + 'Test accuracy Transformer', test_accuracy)
 
 def main():
     comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
@@ -71,7 +74,13 @@ def main():
     epochs = 150
 
     one_vs_rest = False
-    classes = ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"] # , "DF", "FSH", "FS", "NT"
+    classes = ["ORIGINAL", "DF"] # , "F2F", "DF", "FSH", "FS", "NT"
+
+    if one_vs_rest:
+        str_classes = "-".join(classes[1:])
+        str_classes = "ORIGINAL vs " + str_classes
+    else:
+        str_classes = "-".join(classes)
 
     exp = comet_ml.Experiment(project_name="Generative Models Project Work", auto_metric_logging=False, auto_param_logging=False)
     parameters = {'batch_size': batch_train, 'learning_rate': lr}
@@ -96,7 +105,7 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr)
 
-    train(epochs, model, optimizer, training_dataloader, val_dataloader, test_dataloader, device, exp)
+    train(epochs, model, optimizer, training_dataloader, val_dataloader, test_dataloader, device, exp, str_classes)
 
 
 if __name__ == '__main__':
