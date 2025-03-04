@@ -9,7 +9,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 
 
-def vae_loss(x_recon, x, mu, logvar, beta=0.2):
+def vae_loss(x_recon, x, mu, logvar, beta=0.75):
     recon_loss = F.l1_loss(x_recon, x, reduction='sum')
     kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     return recon_loss + beta * kl_div
@@ -97,17 +97,13 @@ def main():
     dataset_val = FastDataset(val_dataset_path, classes_test, one_vs_rest)
     val_dataloader = DataLoader(dataset_val, batch_size=1, shuffle=True, drop_last=False,pin_memory=True, num_workers=num_workers)
 
-    dataset_test = FastDataset(test_dataset_path, classes_test, one_vs_rest)
-    test_dataloader = DataLoader(dataset_test, batch_size=1, shuffle=True, drop_last=False,pin_memory=True, num_workers=num_workers)
-
     model = VariationalAutoencoder(input_dim=768, latent_dim=8).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr)
 
     train(epochs, training_dataloader, val_dataloader, optimizer, model, device, exp)
 
-    accuracy, threshold = test_vae_classifier(model, test_dataloader, device)
-    print(f"Test Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}")
+    torch.save(model.state_dict(), "Models/VAE-075.pth")
 
 if __name__ == '__main__':
     main()

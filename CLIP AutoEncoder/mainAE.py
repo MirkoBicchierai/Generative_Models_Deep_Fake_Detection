@@ -9,7 +9,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 
 
-def test_vae_classifier(model, test_loader, device):
+def test_ae_classifier(model, test_loader, device):
     model.eval()
 
     with torch.no_grad():
@@ -61,7 +61,7 @@ def train(epochs,training_dataloader, val_dataloader, optimizer, model, device, 
         epoch_loss = tot_loss / len(training_dataloader)
         if epoch % 10 == 0:
             print(f"Epoch {epoch} Loss: {epoch_loss:.6f}")
-            accuracy, threshold = test_vae_classifier(model, val_dataloader, device)
+            accuracy, threshold = test_ae_classifier(model, val_dataloader, device)
             exp.log_metric('Validation Accuracy AE', accuracy, step=epoch)
             print(f"Epoch {epoch} Validation Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}")
         exp.log_metric('loss AE', epoch_loss, step=epoch)
@@ -73,14 +73,12 @@ def main():
 
     train_dataset_path = "../Dataset/FF++/CLIP/train"
     val_dataset_path = "../Dataset/FF++/CLIP/val"
-    test_dataset_path = "../Dataset/FF++/CLIP/test"
 
-    #DataLoader parameters
     batch_train = 64
     num_workers = 12
 
     epochs = 100
-    lr = 1e-2
+    lr = 1e-3
 
     one_vs_rest = True
     classes_train = ["ORIGINAL"]
@@ -96,17 +94,12 @@ def main():
     dataset_val = FastDataset(val_dataset_path, classes_test, one_vs_rest)
     val_dataloader = DataLoader(dataset_val, batch_size=1, shuffle=True, drop_last=False,pin_memory=True, num_workers=num_workers)
 
-    dataset_test = FastDataset(test_dataset_path, classes_test, one_vs_rest)
-    test_dataloader = DataLoader(dataset_test, batch_size=1, shuffle=True, drop_last=False,pin_memory=True, num_workers=num_workers)
-
     model = AutoEncoder(input_dim=768).to(device)
-
     optimizer = torch.optim.AdamW(model.parameters(), lr)
 
     train(epochs, training_dataloader, val_dataloader, optimizer, model, device, exp)
 
-    accuracy, threshold = test_vae_classifier(model, test_dataloader, device)
-    print(f"Test Accuracy: {accuracy:.6f}, Threshold: {threshold:.6f}")
+    torch.save(model.state_dict(), "../CLIP AutoEncoder/Models/AE.pth")
 
 if __name__ == '__main__':
     main()
