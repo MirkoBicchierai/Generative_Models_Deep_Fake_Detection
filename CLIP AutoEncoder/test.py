@@ -15,11 +15,23 @@ def plot_mean_bar(errors_original, errors_fake, fake_class, name):
     colors = ["#4CAF50"] + ["#E57373" for _ in fake_class]
 
     plt.bar(["Original"] + fake_class, [errors_original]+errors_fake, color=colors)
+    # Labels and title
+    plt.ylabel("Mean of MSE errors")
+    plt.title("Mean of MSE errors per Class - " + name)
+    plt.savefig("../CLIP AutoEncoder/Plot/bar_plot_"+name+".pdf")
+
+def plot_log_mean_bar(errors_original, errors_fake, fake_class, name):
+    # Bar plot
+    plt.figure(figsize=(7, 5))
+
+    colors = ["#4CAF50"] + ["#E57373" for _ in fake_class]
+
+    plt.bar(["Original"] + fake_class, [errors_original] + errors_fake, color=colors)
     plt.yscale('log')
     # Labels and title
     plt.ylabel("Mean of MSE errors")
     plt.title("Mean of MSE errors per Class - " + name)
-    plt.savefig("../CLIP AutoEncoder/Plot/bar_plot_logscale_"+name+".pdf")
+    plt.savefig("../CLIP AutoEncoder/Plot/bar_plot_logscale_" + name + ".pdf")
 
 
 def test_ae_classifier(model, test_loader, device, vae):
@@ -60,9 +72,9 @@ def test_ae_classifier(model, test_loader, device, vae):
 
 
 def main():
-    vae = True
-    name_plot = "VAE beta=2"
-    model_path = "../CLIP AutoEncoder/Models/VAE-2.pth"
+    vae = False
+    name_plot = "AE"
+    model_path = "../CLIP AutoEncoder/Models/AE.pth"
     test_dataset_path = "../Dataset/FF++/CLIP/test"
 
     one_vs_rest = True
@@ -95,6 +107,7 @@ def main():
 
 
     plot_mean_bar(errors_original, errors_fake, fake_class, name_plot)
+    plot_log_mean_bar(errors_original, errors_fake, fake_class, name_plot)
 
 if __name__ == '__main__':
     main()
