@@ -19,10 +19,10 @@ all_classes = [
 ]
 
 # nicco api key
-# comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
+comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
 
 # mirko api
-comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
+# comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
 
 
 def main():
@@ -71,9 +71,9 @@ def main():
         "ORIGINAL",
         "F2F",
         "DF",
-        "FSH",
+        # "FSH",
         "FS",
-        # "NT",
+        "NT",
     ]  # ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"]
     oscr_classes = list(set(all_classes) - set(classes))
     lstm = False
