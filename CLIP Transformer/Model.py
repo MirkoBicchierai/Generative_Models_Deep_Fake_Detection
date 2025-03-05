@@ -58,6 +58,7 @@ class TransformerClassifier(nn.Module):
         batch_size = x.size(0)
 
         x = self.input_norm(x)
+
         x = self.embedding(x)
 
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)

@@ -129,7 +129,7 @@ def main():
 
     epochs = 150
 
-    one_vs_rest = True
+    one_vs_rest = False
     classes = [
         "ORIGINAL",
         # "F2F",
@@ -139,7 +139,7 @@ def main():
         "NT",
     ]  # ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"]
     missing_classes = list(set(all_classes) - set(classes))
-    if one_vs_rest and len(missing_classes) == 1:
+    if len(missing_classes) == 1:
         str_classes = "Missing " + missing_classes[0]
     elif one_vs_rest:
         str_classes = "-".join(classes[1:])
@@ -152,6 +152,7 @@ def main():
         auto_metric_logging=False,
         auto_param_logging=False,
     )
+
     exp.set_name("TRANSFORMER " + " - " + "CLIP" + " - " + str_classes)
     parameters = {"batch_size": batch_train, "learning_rate": lr}
     exp.log_parameters(parameters)
