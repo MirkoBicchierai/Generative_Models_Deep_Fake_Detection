@@ -12,10 +12,10 @@ import torch.nn.functional as F
 from oscr import compute_oscr
 
 # nicco api
-comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
+# comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
 
 # mirko api
-# comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
+comet_ml.login(api_key="S8bPmX5TXBAi6879L55Qp3eWW")
 
 all_classes = [
     "ORIGINAL",
@@ -214,6 +214,8 @@ def main():
         exp_class = "Original vs All"
     elif len(classes) == 6:
         exp_class = "All Classes"
+    elif len(oscr_classes) == 1:
+        exp_class = f"Missing {oscr_classes[0]}"
     else:
         exp_class = classes[1]
 
@@ -233,7 +235,7 @@ def main():
     final_hidden_size = 256
     num_classes = 2 if one_vs_rest else len(classes)
     learning_rate = lr
-    epochs = 1
+    epochs = 150
 
     # Initialize model, loss function, and optimizer
     model = ClassificationMLP(
@@ -319,6 +321,8 @@ def main():
     # Get predictions for unknown samples (labels not needed here)
 
     results = compute_oscr(pred_k, pred_u, labels)
+    exp.log_metric(str(oscr_classes) + "OSCR Score", results["oscr"])
+    exp.log_metric(str(oscr_classes) + "CCR@FPR05", results["ccr@fpr05"])
 
     print(f"OSCR Score (AUROC): {results['oscr']:.4f}")
     print(f"CCR @ 5% FPR: {results['ccr@fpr05']:.4f}")

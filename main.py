@@ -28,7 +28,7 @@ comet_ml.login(api_key="WQRfjlovs7RSjYUmjlMvNt3PY")
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    dataset = "DINO"
+    dataset = "CLIP"
     epochs = 300
 
     if dataset == "CLIP":
@@ -71,16 +71,18 @@ def main():
         "ORIGINAL",
         "F2F",
         "DF",
-        "FSH",
+        # "FSH",
         "FS",
-        # "NT",
+        "NT",
     ]  # ["ORIGINAL", "F2F", "DF", "FSH", "FS", "NT"]
     oscr_classes = list(set(all_classes) - set(classes))
-    lstm = True
-    one_vs_rest = False  # if true consider all fake classes as same class
+    lstm = False
+    one_vs_rest = True  # if true consider all fake classes as same class
     if one_vs_rest:
-        str_classes = "-".join(classes[1:])
-        str_classes = "ORIGINAL vs " + str_classes
+        # str_classes = "-".join(classes[1:])
+        # str_classes = "ORIGINAL vs " + str_classes
+        str_classes = "Missing " + oscr_classes[0]
+
     else:
         str_classes = "-".join(classes)
 
@@ -89,6 +91,7 @@ def main():
         auto_metric_logging=False,
         auto_param_logging=False,
     )
+    exp.set_name(dataset + " - " + "GRU" + " - " + str_classes)
     parameters = {
         "batch_size": batch_train,
         "learning_rate": lr,
@@ -235,8 +238,9 @@ def main():
     results = compute_oscr(pred_k, pred_u, all_labels)
     print(f"OSCR Score (AUROC): {results['oscr']:.4f}")
     print(f"CCR @ 5% FPR: {results['ccr@fpr05']:.4f}")
+    exp.log_metric("OSCR", results["oscr"])
+    exp.log_metric("CCR @ 5% FPR", results["ccr@fpr05"])
 
 
 if __name__ == "__main__":
     main()
-
